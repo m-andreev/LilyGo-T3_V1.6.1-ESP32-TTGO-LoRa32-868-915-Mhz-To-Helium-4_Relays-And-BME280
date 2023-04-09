@@ -36,7 +36,7 @@
 
 // Keys required for OTAA activation:
 
-/// End-device Identifier (u1_t[8]) in lsb format
+// End-device Identifier (u1_t[8]) in lsb format
 #define OTAA_DEVEUI 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 
 // Application Identifier (u1_t[8]) in lsb format

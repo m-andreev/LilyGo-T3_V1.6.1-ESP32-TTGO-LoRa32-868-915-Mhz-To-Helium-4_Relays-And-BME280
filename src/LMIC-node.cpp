@@ -889,7 +889,7 @@ void processWork(ostime_t doWorkJobTimeStamp)
                 strcat(fullbuffer1, temp1);
                 strcat(fullbuffer1, " *C ");
 
-                Serial.println();
+                //Serial.println();
                 uint8_t Ccounter = 0;
                 for (int i = 0; i < sizeof(fullbuffer1); i++)
                 {
@@ -910,7 +910,7 @@ void processWork(ostime_t doWorkJobTimeStamp)
                     payloadBuffer[i] = c;
                     Serial.print((char)fullbuffer1[i]);
                 }
-                Serial.println();
+                //Serial.println();
             }
 
             if (myStructure.deviceType == DEVICE_TYPE_RELAYS)
