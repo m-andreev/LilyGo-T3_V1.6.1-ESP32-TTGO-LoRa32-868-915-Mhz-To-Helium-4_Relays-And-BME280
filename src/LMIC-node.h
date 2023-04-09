@@ -79,8 +79,8 @@ enum class ActivationMode {OTAA, ABP};
 #endif    
 
 
-#include "C:\Users\Machi\Documents\PlatformIO\Projects\LillyGo-TTGO-ESP32_LoRa32_4Relays_BME280_project\src\boards\bsf_ttgo_lora32_v21.h" // Include Board Support File
-#include "C:\Users\Machi\Documents\PlatformIO\Projects\LillyGo-TTGO-ESP32_LoRa32_4Relays_BME280_project\keyfiles\lorawan-keys.h"
+#include "C:\Users\Machi\Documents\PlatformIO\Projects\LillyGO-TTGO-4_Relays_BME280_\src\boards\bsf_ttgo_lora32_v21.h" // Include Board Support File
+#include "C:\Users\Machi\Documents\PlatformIO\Projects\LillyGO-TTGO-4_Relays_BME280_\keyfiles\lorawan-keys.h"
 
     
 #if defined(ABP_ACTIVATION) && defined(OTAA_ACTIVATION)

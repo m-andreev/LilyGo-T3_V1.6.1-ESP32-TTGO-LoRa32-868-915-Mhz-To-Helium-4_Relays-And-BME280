@@ -71,7 +71,6 @@ struct eepromData
     uint32_t interval;
     DeviceType deviceType;
     char relaysChar;
-    bool relay_switch_on; /// set to false by default :) So Sensors go first if nothing is set
 } myStructure;
 
 // Function to save the structure to EEPROM
@@ -110,7 +109,7 @@ void printDataChange(eepromData &myStructure)
     Serial.print("deviceType = ");
     Serial.println(myStructure.deviceType);
     Serial.println();
-    if (myStructure.relay_switch_on == true)
+    if (myStructure.deviceType == DEVICE_TYPE_RELAYS)
     {
         Serial.print("Saved relays state: ");
         Serial.println(myStructure.relaysChar, BIN);
@@ -154,17 +153,6 @@ int downLink = 0;
 uint8_t payloadBuffer[payloadBufferLength];
 static osjob_t doWorkJob;
 uint32_t doWorkIntervalSeconds = DO_WORK_INTERVAL_SECONDS; // Change value in platformio.ini
-
-/*
-void onDownlink(uint32_t value)
-{
-    // Update the value
-    doWorkIntervalSeconds = value;
-
-    // Save the value to EEPROM
-    saveDoWorkIntervalSeconds(value);
-}
-*/
 
 // Note: LoRa module pin mappings are defined in the Board Support Files.
 
@@ -833,14 +821,11 @@ void processWork(ostime_t doWorkJobTimeStamp)
         serial.print(F("COUNTER value: "));
         serial.println(counterValue);
         serial.println();
-        // Serial.print("downLink: " );
-        // Serial.println(downLink);
-        Serial.println();
+        
         // BME Sensors Part //////////////////////////////////////////////////////////////////
-        if (myStructure.relay_switch_on = false)
+        if (myStructure.deviceType == DEVICE_TYPE_SENSORS)
         {
-
-            Serial.println("2xBME280 Sensors data:");
+            Serial.println("BME280 Sensors data:");
             Serial.println("Device\tPressure\tHumdity\t\tTemp");
             Serial.print("BME 1\t");
             bme1.readSensor();
@@ -856,6 +841,7 @@ void processWork(ostime_t doWorkJobTimeStamp)
         // Print the value of the variable
         Serial.print("Changed doWorkIntervalSeconds: ");
         Serial.println(doWorkIntervalSeconds);
+        Serial.println();
 
 #endif
 
@@ -884,7 +870,7 @@ void processWork(ostime_t doWorkJobTimeStamp)
 
             /// Here we must prepare the uplink payload
             /// If sensor_switch is enabled
-            if (myStructure.relay_switch_on == false)
+            if (myStructure.deviceType == DEVICE_TYPE_SENSORS)
             {
 
                 char temp1[5];
@@ -902,18 +888,6 @@ void processWork(ostime_t doWorkJobTimeStamp)
                 strcat(fullbuffer1, "t1: ");
                 strcat(fullbuffer1, temp1);
                 strcat(fullbuffer1, " *C ");
-
-                // s2temp values
-                // we need to convert from float to uint8_t/char the values
-                // float temperature2 = bme2.getTemperature_C();
-                // snprintf(temp2, sizeof(temp2), "%.2f", temperature2);
-                // 4 is mininum width, 2 is precision; float value is copied onto buff value1
-                /// dtostrf(temperature2, 4, 2, temp2); ///double to string conversion function
-                // sprintf(temp2, "%g", temperature2);
-
-                // strcat(fullbuffer1, "t2: ");
-                // strcat(fullbuffer1, temp2);
-                // strcat(fullbuffer1, " *C");
 
                 Serial.println();
                 uint8_t Ccounter = 0;
@@ -938,7 +912,8 @@ void processWork(ostime_t doWorkJobTimeStamp)
                 }
                 Serial.println();
             }
-            else if (myStructure.relay_switch_on == true)
+
+            if (myStructure.deviceType == DEVICE_TYPE_RELAYS)
             {
                 ////Relays Code////
                 uint8_t Reading1 = digitalRead(RELAY_PIN1); // Reading status of digital Pin 128
@@ -950,16 +925,21 @@ void processWork(ostime_t doWorkJobTimeStamp)
                 tempArr[1] = (Reading2 ? '1' : '0');
                 tempArr[2] = (Reading3 ? '1' : '0');
                 tempArr[3] = (Reading4 ? '1' : '0');
-
+                
+                Serial.print("Current relay state: ");
                 for (int i = 0; i < sizeof(tempArr) - 1; i++)
                 {
                     Serial.print((char)tempArr[i]);
                 }
                 Serial.println();
+                
+                currChar = myStructure.relaysChar;
 
                 // Print the current state of the relays
-                Serial.print("Current relay state: ");
+                Serial.print("Current relay state's char: ");
                 Serial.println(currChar, BIN);
+                payloadBuffer[0] = currChar;
+                payloadSize = 1;
             }
 
             scheduleUplink(fPort, payloadBuffer, payloadSize);
@@ -1058,7 +1038,7 @@ void processDownlink(ostime_t txCompleteTimestamp, uint8_t fPort, uint8_t *data,
             char c = (char)data[i];
             if (!(c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'))
             {
-                downlinkLength = i; /// maybe i+1
+                downlinkLength = i;
                 data[i] = '\0';
                 tempVar[i] = '\0';
                 break;
@@ -1073,7 +1053,7 @@ void processDownlink(ostime_t txCompleteTimestamp, uint8_t fPort, uint8_t *data,
         Serial.println();
     }
 
-    if (fPort == 3 && dataLength == 1)
+    if (fPort == 3 && dataLength == 1 && myStructure.deviceType == DEVICE_TYPE_RELAYS)
     {
         // Extract the downlink value
         uint8_t downlinkValue = data[0];
@@ -1112,19 +1092,20 @@ void processDownlink(ostime_t txCompleteTimestamp, uint8_t fPort, uint8_t *data,
         if (data[0] == '1')
         {
             /// Activate Sensors , deactivate relays
-            myStructure.relay_switch_on = false;
+            // myStructure.relay_switch_on = false;
             myStructure.deviceType = DEVICE_TYPE_SENSORS;
             Serial.println("Current device type has been changed to DEVICE_TYPE_SENSORS");
-        }
-        else if (data[0] == '2')
-        {
-            /// Activate Relays , deactivate sensors
-            myStructure.relay_switch_on = true;
-            myStructure.deviceType = DEVICE_TYPE_RELAYS;
-            Serial.println("Current device type has been changed to DEVICE_TYPE_RELAYS");
+            saveToEEPROM();
         }
 
-        saveToEEPROM();
+        if (data[0] == '2')
+        {
+            /// Activate Relays , deactivate sensors
+            // myStructure.relay_switch_on = true;
+            myStructure.deviceType = DEVICE_TYPE_RELAYS;
+            Serial.println("Current device type has been changed to DEVICE_TYPE_RELAYS");
+            saveToEEPROM();
+        }
     }
 }
 
@@ -1175,55 +1156,37 @@ void setup()
 
     resetCounter();
     Serial.begin(115200);
+    if (!bme1.begin())
+    {
+        Serial.println("Could not find a First BME280 sensor, check wiring!");
+        while (1)
+            ;
+    }
+
+    // Relays Initialization
+    pinMode(RELAY_PIN1, OUTPUT);
+    pinMode(RELAY_PIN2, OUTPUT);
+    pinMode(RELAY_PIN3, OUTPUT);
+    pinMode(RELAY_PIN4, OUTPUT);
+
+    digitalWrite(RELAY_PIN1, LOW);
+    digitalWrite(RELAY_PIN2, LOW);
+    digitalWrite(RELAY_PIN3, LOW);
+    digitalWrite(RELAY_PIN4, LOW);
 
     // Retrieve the data from the EEPROM
     getFromEEPROM();
 
-    /// DeviceType sanity check
-    if (myStructure.deviceType == DEVICE_TYPE_SENSORS)
+    if (myStructure.relaysChar == '\0')
     {
-        // This value indicates that the variable was never set, so set a default value
-        myStructure.relay_switch_on = false;
-        if (!bme1.begin())
-        {
-            Serial.println("Could not find a First BME280 sensor, check wiring!");
-            while (1)
-                ;
-        }
+        myStructure.relaysChar = 0b00000000;
     }
-    else if (myStructure.deviceType == DEVICE_TYPE_RELAYS)
-    {
-        myStructure.relay_switch_on = true;
-        // Relays Initialization
-        pinMode(RELAY_PIN1, OUTPUT);
-        pinMode(RELAY_PIN2, OUTPUT);
-        pinMode(RELAY_PIN3, OUTPUT);
-        pinMode(RELAY_PIN4, OUTPUT);
 
-        if (myStructure.relaysChar == '\0')
-        {
-            myStructure.relaysChar = 0b00000000;
-        }
-
-        // Update the state of all the relays based on the downlink value
-        digitalWrite(RELAY_PIN1, (myStructure.relaysChar & 0b10000000) != 0);
-        digitalWrite(RELAY_PIN2, (myStructure.relaysChar & 0b01000000) != 0);
-        digitalWrite(RELAY_PIN3, (myStructure.relaysChar & 0b00100000) != 0);
-        digitalWrite(RELAY_PIN4, (myStructure.relaysChar & 0b00010000) != 0);
-    }
-    else
-    {
-        // Default value for deviceType = SensorsType if it's not set
-        // sensors_switch = true;
-        myStructure.relay_switch_on = false;
-        myStructure.deviceType = DEVICE_TYPE_SENSORS;
-        if (!bme1.begin())
-        {
-            Serial.println("Could not find a First BME280 sensor, check wiring!");
-            while (1)
-                ;
-        }
-    }
+    // Update the state of all the relays based on the downlink value
+    digitalWrite(RELAY_PIN1, (myStructure.relaysChar & 0b10000000) != 0);
+    digitalWrite(RELAY_PIN2, (myStructure.relaysChar & 0b01000000) != 0);
+    digitalWrite(RELAY_PIN3, (myStructure.relaysChar & 0b00100000) != 0);
+    digitalWrite(RELAY_PIN4, (myStructure.relaysChar & 0b00010000) != 0);
 
     // Sanity check the retrieved values
     if (myStructure.interval == 0xFFFFFFFF)
