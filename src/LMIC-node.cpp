@@ -910,7 +910,7 @@ void processWork(ostime_t doWorkJobTimeStamp)
                     payloadBuffer[i] = c;
                     Serial.print((char)fullbuffer1[i]);
                 }
-                //Serial.println();
+                Serial.println();
             }
 
             if (myStructure.deviceType == DEVICE_TYPE_RELAYS)
