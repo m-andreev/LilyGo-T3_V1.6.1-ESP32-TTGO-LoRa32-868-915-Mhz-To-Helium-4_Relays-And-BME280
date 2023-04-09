@@ -898,8 +898,8 @@ void processWork(ostime_t doWorkJobTimeStamp)
                     if (Ccounter == 1)
                     {
                         fullbuffer1[i] = '\0';
-                        payloadBuffer[i] = '\0';
-                        payloadSize = i;
+                        //payloadBuffer[i] = '\0';
+                        //payloadSize = i;
                         break;
                     }
 
@@ -907,9 +907,26 @@ void processWork(ostime_t doWorkJobTimeStamp)
                     {
                         Ccounter++;
                     }
-                    payloadBuffer[i] = c;
+                    //payloadBuffer[i] = c;
                     Serial.print((char)fullbuffer1[i]);
                 }
+                Serial.println();
+
+                ///Preparing the payloadBuffer
+                char tempBuff[6];
+                snprintf(tempBuff, sizeof(tempBuff), "%.2f", temperature1);
+
+                for(int i = 0; i < sizeof(tempBuff); i++){
+                    if(!(tempBuff[i] >= '0' && tempBuff[i] <= '9') && tempBuff[i] != '.'){
+                        tempBuff[i] = '\0';
+                        payloadBuffer[i] = '\0';
+                        payloadSize = i;
+                        break;
+                    }
+                    payloadBuffer[i] = tempBuff[i];
+                    Serial.print(tempBuff[i]); ///this is the char array of temp1
+                }
+                //payloadSize = sizeof(tempBuff) + 1;
                 Serial.println();
             }
 
