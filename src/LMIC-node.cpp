@@ -57,8 +57,8 @@
 //  ▀▀▀ ▀▀▀ ▀▀▀ ▀ ▀   ▀▀▀ ▀▀▀ ▀▀  ▀▀▀   ▀▀  ▀▀▀ ▀▀▀ ▀▀▀ ▀ ▀
 
 #include "EEPROM.h"
-
-/// bool sensors_switch = true;
+#include "sensors.h"
+#include "relays.h"
 
 enum DeviceType
 {
@@ -121,15 +121,14 @@ void printDataChange(eepromData &myStructure)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-// #include "cactus_io_BME280_I2C.cpp"
 
-// Create two BME280 instances
-BME280_I2C bme1(0x76); // I2C using address 0x76
+// Create one BME280 instance, which is 0x76, because of constructor
+sensorBME280 bme1(0x76); // I2C using address 0x76
 
 // Relays' pins definitions
 const int RELAY_PIN1 = 15;
 const int RELAY_PIN2 = 14;
-const int RELAY_PIN3 = 4; /// not 2
+const int RELAY_PIN3 = 4;
 const int RELAY_PIN4 = 13;
 
 uint8_t currChar = 0b00000000;
@@ -821,20 +820,11 @@ void processWork(ostime_t doWorkJobTimeStamp)
         serial.print(F("COUNTER value: "));
         serial.println(counterValue);
         serial.println();
-        
+
         // BME Sensors Part //////////////////////////////////////////////////////////////////
         if (myStructure.deviceType == DEVICE_TYPE_SENSORS)
         {
-            Serial.println("BME280 Sensors data:");
-            Serial.println("Device\tPressure\tHumdity\t\tTemp");
-            Serial.print("BME 1\t");
-            bme1.readSensor();
-            Serial.print(bme1.getPressure_MB());
-            Serial.print(" mb\t"); // Pressure in millibars
-            Serial.print(bme1.getHumidity());
-            Serial.print(" %\t\t");
-            Serial.print(bme1.getTemperature_C());
-            Serial.print(" *C\t");
+            bme1.printBMETable();
         }
 
         Serial.println();
@@ -861,73 +851,18 @@ void processWork(ostime_t doWorkJobTimeStamp)
         }
         else
         {
-
             //// Prepare uplink payload.
-
             uint8_t fPort = 10;
-            uint8_t payloadLength = 16; //// TOVA TRQBVA DA SE OPRAVI!!!!!!!!!!!!!!
-            uint8_t payloadSize = 0;
+            uint8_t payloadSize = 16;
 
             /// Here we must prepare the uplink payload
             /// If sensor_switch is enabled
             if (myStructure.deviceType == DEVICE_TYPE_SENSORS)
             {
-
-                char temp1[5];
-                // char temp2[5];
-                char fullbuffer1[payloadLength * 2];
-
-                // s1temp values
-                // we need to convert from float to uint8_t/char the values
-                float temperature1 = bme1.getTemperature_C();
-                snprintf(temp1, sizeof(temp1), "%.2f", temperature1);
-                // 4 is mininum width, 2 is precision; float value is copied onto buff value1
-                /// dtostrf(temperature1, 4, 2, temp1); ///double to string conversion function
-                // sprintf(temp1, "%g", temperature1);
-
-                strcat(fullbuffer1, "t1: ");
-                strcat(fullbuffer1, temp1);
-                strcat(fullbuffer1, " *C ");
-
-                //Serial.println();
-                uint8_t Ccounter = 0;
-                for (int i = 0; i < sizeof(fullbuffer1); i++)
-                {
-                    char c = (char)fullbuffer1[i];
-
-                    if (Ccounter == 1)
-                    {
-                        fullbuffer1[i] = '\0';
-                        //payloadBuffer[i] = '\0';
-                        //payloadSize = i;
-                        break;
-                    }
-
-                    if (c == 'C')
-                    {
-                        Ccounter++;
-                    }
-                    //payloadBuffer[i] = c;
-                    Serial.print((char)fullbuffer1[i]);
-                }
-                Serial.println();
-
-                ///Preparing the payloadBuffer
-                char tempBuff[6];
-                snprintf(tempBuff, sizeof(tempBuff), "%.2f", temperature1);
-
-                for(int i = 0; i < sizeof(tempBuff); i++){
-                    if(!(tempBuff[i] >= '0' && tempBuff[i] <= '9') && tempBuff[i] != '.'){
-                        tempBuff[i] = '\0';
-                        payloadBuffer[i] = '\0';
-                        payloadSize = i;
-                        break;
-                    }
-                    payloadBuffer[i] = tempBuff[i];
-                    Serial.print(tempBuff[i]); ///this is the char array of temp1
-                }
-                //payloadSize = sizeof(tempBuff) + 1;
-                Serial.println();
+                bme1.printPacket();
+                bme1.buildPacket(payloadBuffer, payloadSize);
+                uint8_t *myArrayPointer = bme1.getPayload(); // get the pointer to the array returned by myFunction
+                memcpy(payloadBuffer, myArrayPointer, sizeof(payloadSize)); // copy the contents of myArrayPointer to payload
             }
 
             if (myStructure.deviceType == DEVICE_TYPE_RELAYS)
@@ -942,14 +877,14 @@ void processWork(ostime_t doWorkJobTimeStamp)
                 tempArr[1] = (Reading2 ? '1' : '0');
                 tempArr[2] = (Reading3 ? '1' : '0');
                 tempArr[3] = (Reading4 ? '1' : '0');
-                
+
                 Serial.print("Current relay state: ");
                 for (int i = 0; i < sizeof(tempArr) - 1; i++)
                 {
                     Serial.print((char)tempArr[i]);
                 }
                 Serial.println();
-                
+
                 currChar = myStructure.relaysChar;
 
                 // Print the current state of the relays
@@ -1173,7 +1108,8 @@ void setup()
 
     resetCounter();
     Serial.begin(115200);
-    if (!bme1.begin())
+
+    if (!bme1.init())
     {
         Serial.println("Could not find a First BME280 sensor, check wiring!");
         while (1)
