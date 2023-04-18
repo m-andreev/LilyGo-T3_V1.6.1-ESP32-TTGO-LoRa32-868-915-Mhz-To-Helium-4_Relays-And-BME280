@@ -111,8 +111,21 @@ void printDataChange(eepromData &myStructure)
     Serial.println();
     if (myStructure.deviceType == DEVICE_TYPE_RELAYS)
     {
-        Serial.print("Saved relays state: ");
-        Serial.println(myStructure.relaysChar, BIN);
+        Serial.print("Saved relays' state: ");
+        // Convert currChar to a binary string
+        String binaryStr = String(myStructure.relaysChar, BIN);
+
+        // Print the binary string with leading zeros
+        for (int i = 0; i < 8 - binaryStr.length(); i++)
+        {
+            Serial.print("0");
+        }
+        for (int i = 0; i < binaryStr.length(); i++)
+        {
+            Serial.print(binaryStr[i]);
+        }
+        Serial.println();
+        // Serial.println(myStructure.relaysChar, BIN);
     }
 }
 
@@ -125,25 +138,28 @@ void printDataChange(eepromData &myStructure)
 // Create one BME280 instance, which is 0x76, because of constructor
 sensorBME280 bme1(0x76); // I2C using address 0x76
 
+// Create relays instance
+Relays relays;
+
+/*
 // Relays' pins definitions
 const int RELAY_PIN1 = 15;
 const int RELAY_PIN2 = 14;
 const int RELAY_PIN3 = 4;
 const int RELAY_PIN4 = 13;
+*/
 
-uint8_t currChar = 0b00000000;
+uint8_t currChar = 0b00000000; /// current 4 relays' states
 
-uint8_t tempArr[5];
+uint8_t tempArr[5]; /// temporary array for assigning values of relays! High / Low
 
 const uint8_t payloadBufferLength = 32; // Adjust to fit max payload length
 
-uint8_t tempVar[payloadBufferLength];
-int8_t downlinkLength;
+uint8_t tempVar[payloadBufferLength]; /// temporary variable for printing text ON DEVICE'S SCREEN!
+int8_t downlinkLength;                /// length of the text, that's send to the device
 
 int payloadCounter = 16;
 int downLink = 0;
-
-/// uint32_t doWorkIntervalSeconds2; /// 60 seconds work interval
 
 //  █ █ █▀▀ █▀▀ █▀▄   █▀▀ █▀█ █▀▄ █▀▀   █▀▀ █▀█ █▀▄
 //  █ █ ▀▀█ █▀▀ █▀▄   █   █ █ █ █ █▀▀   █▀▀ █ █ █ █
@@ -861,23 +877,24 @@ void processWork(ostime_t doWorkJobTimeStamp)
             {
                 bme1.printPacket();
                 bme1.buildPacket(payloadBuffer, payloadSize);
-                uint8_t *myArrayPointer = bme1.getPayload(); // get the pointer to the array returned by myFunction
+                uint8_t *myArrayPointer = bme1.getPayload();                // get the pointer to the array returned by myFunction
                 memcpy(payloadBuffer, myArrayPointer, sizeof(payloadSize)); // copy the contents of myArrayPointer to payload
             }
 
             if (myStructure.deviceType == DEVICE_TYPE_RELAYS)
             {
                 ////Relays Code////
-                uint8_t Reading1 = digitalRead(RELAY_PIN1); // Reading status of digital Pin 128
-                uint8_t Reading2 = digitalRead(RELAY_PIN2); // Reading status of digital Pin 64
-                uint8_t Reading3 = digitalRead(RELAY_PIN3); // Reading status of digital Pin 32
-                uint8_t Reading4 = digitalRead(RELAY_PIN4); // Reading status of digital Pin 16
+                uint8_t Reading1 = digitalRead(relays.RELAY_PIN1); // Reading status of digital Pin 128
+                uint8_t Reading2 = digitalRead(relays.RELAY_PIN2); // Reading status of digital Pin 64
+                uint8_t Reading3 = digitalRead(relays.RELAY_PIN3); // Reading status of digital Pin 32
+                uint8_t Reading4 = digitalRead(relays.RELAY_PIN4); // Reading status of digital Pin 16
 
                 tempArr[0] = (Reading1 ? '1' : '0');
                 tempArr[1] = (Reading2 ? '1' : '0');
                 tempArr[2] = (Reading3 ? '1' : '0');
                 tempArr[3] = (Reading4 ? '1' : '0');
 
+                // Print the current readings
                 Serial.print("Current relay state: ");
                 for (int i = 0; i < sizeof(tempArr) - 1; i++)
                 {
@@ -885,11 +902,24 @@ void processWork(ostime_t doWorkJobTimeStamp)
                 }
                 Serial.println();
 
+                // Assign the readings to the current char , if EEPROM has no char
                 currChar = myStructure.relaysChar;
 
-                // Print the current state of the relays
+                // Convert currChar to a binary string
+                String binaryStr = String(currChar, BIN);
+
+                // Print the binary string with leading zeros , because of MSB printing of BIN format :)
                 Serial.print("Current relay state's char: ");
-                Serial.println(currChar, BIN);
+                for (int i = 0; i < 8 - binaryStr.length(); i++)
+                {
+                    Serial.print("0");
+                }
+                for (int i = 0; i < binaryStr.length(); i++)
+                {
+                    Serial.print(binaryStr[i]);
+                }
+                Serial.println();
+
                 payloadBuffer[0] = currChar;
                 payloadSize = 1;
             }
@@ -1022,15 +1052,18 @@ void processDownlink(ostime_t txCompleteTimestamp, uint8_t fPort, uint8_t *data,
         else
         {
             // Update the state of all the relays based on the downlink value
-            digitalWrite(RELAY_PIN1, (downlinkValue & 0b10000000) != 0);
-            digitalWrite(RELAY_PIN2, (downlinkValue & 0b01000000) != 0);
-            digitalWrite(RELAY_PIN3, (downlinkValue & 0b00100000) != 0);
-            digitalWrite(RELAY_PIN4, (downlinkValue & 0b00010000) != 0);
+            relays.setRelays(downlinkValue);
+            /*
+            digitalWrite(relays.RELAY_PIN1, (downlinkValue & 0b10000000) != 0);
+            digitalWrite(relays.RELAY_PIN2, (downlinkValue & 0b01000000) != 0);
+            digitalWrite(relays.RELAY_PIN3, (downlinkValue & 0b00100000) != 0);
+            digitalWrite(relays.RELAY_PIN4, (downlinkValue & 0b00010000) != 0);
+            */
 
             currChar = downlinkValue;
 
             /// Setting the EEPROM variable for relays states
-            myStructure.relaysChar = currChar;
+            myStructure.relaysChar = currChar; // assigning the current changed relays' state
 
             Serial.print("Relay state updated to: ");
             Serial.println(currChar, BIN);
@@ -1043,8 +1076,7 @@ void processDownlink(ostime_t txCompleteTimestamp, uint8_t fPort, uint8_t *data,
     {
         if (data[0] == '1')
         {
-            /// Activate Sensors , deactivate relays
-            // myStructure.relay_switch_on = false;
+            /// Make the program uses the sensors codes
             myStructure.deviceType = DEVICE_TYPE_SENSORS;
             Serial.println("Current device type has been changed to DEVICE_TYPE_SENSORS");
             saveToEEPROM();
@@ -1052,8 +1084,7 @@ void processDownlink(ostime_t txCompleteTimestamp, uint8_t fPort, uint8_t *data,
 
         if (data[0] == '2')
         {
-            /// Activate Relays , deactivate sensors
-            // myStructure.relay_switch_on = true;
+            /// Make the program uses the relays codes
             myStructure.deviceType = DEVICE_TYPE_RELAYS;
             Serial.println("Current device type has been changed to DEVICE_TYPE_RELAYS");
             saveToEEPROM();
@@ -1116,16 +1147,8 @@ void setup()
             ;
     }
 
-    // Relays Initialization
-    pinMode(RELAY_PIN1, OUTPUT);
-    pinMode(RELAY_PIN2, OUTPUT);
-    pinMode(RELAY_PIN3, OUTPUT);
-    pinMode(RELAY_PIN4, OUTPUT);
-
-    digitalWrite(RELAY_PIN1, LOW);
-    digitalWrite(RELAY_PIN2, LOW);
-    digitalWrite(RELAY_PIN3, LOW);
-    digitalWrite(RELAY_PIN4, LOW);
+    // Initializing the relays
+    relays.init();
 
     // Retrieve the data from the EEPROM
     getFromEEPROM();
@@ -1135,11 +1158,8 @@ void setup()
         myStructure.relaysChar = 0b00000000;
     }
 
-    // Update the state of all the relays based on the downlink value
-    digitalWrite(RELAY_PIN1, (myStructure.relaysChar & 0b10000000) != 0);
-    digitalWrite(RELAY_PIN2, (myStructure.relaysChar & 0b01000000) != 0);
-    digitalWrite(RELAY_PIN3, (myStructure.relaysChar & 0b00100000) != 0);
-    digitalWrite(RELAY_PIN4, (myStructure.relaysChar & 0b00010000) != 0);
+    // Update the state of all the relays based on the last saved EEPROM value
+    relays.setRelays(myStructure.relaysChar);
 
     // Sanity check the retrieved values
     if (myStructure.interval == 0xFFFFFFFF)

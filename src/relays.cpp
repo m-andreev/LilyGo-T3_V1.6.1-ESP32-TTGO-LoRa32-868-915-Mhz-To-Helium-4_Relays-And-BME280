@@ -1,9 +1,27 @@
-#include <iostream>
-
 #include "relays.h"
 
-// Relays' pins definitions
-//RELAY_PIN1 = 15;
-//RELAY_PIN2 = 14;
-//RELAY_PIN3 = 4;
-//RELAY_PIN4 = 13;
+Relays::Relays() {}
+
+void Relays::init()
+{
+  pinMode(this->RELAY_PIN1, OUTPUT);
+  pinMode(this->RELAY_PIN2, OUTPUT);
+  pinMode(this->RELAY_PIN3, OUTPUT);
+  pinMode(this->RELAY_PIN4, OUTPUT);
+
+  digitalWrite(this->RELAY_PIN1, LOW);
+  digitalWrite(this->RELAY_PIN2, LOW);
+  digitalWrite(this->RELAY_PIN3, LOW);
+  digitalWrite(this->RELAY_PIN4, LOW);
+}
+
+void Relays::setRelays(uint8_t relayStateChar) /// relayStateChar -> 0b10110000 (first 4 digits of the char are important)
+{
+  uint8_t downlinkRelayState = relayStateChar & 0b11110000; /// this will set the relays states properly, in the user's desired state
+
+  // Update the state of all the relays based on the downlink value
+  digitalWrite(this->RELAY_PIN1, (downlinkRelayState & 0b10000000) != 0);
+  digitalWrite(this->RELAY_PIN2, (downlinkRelayState & 0b01000000) != 0);
+  digitalWrite(this->RELAY_PIN3, (downlinkRelayState & 0b00100000) != 0);
+  digitalWrite(this->RELAY_PIN4, (downlinkRelayState & 0b00010000) != 0);
+}

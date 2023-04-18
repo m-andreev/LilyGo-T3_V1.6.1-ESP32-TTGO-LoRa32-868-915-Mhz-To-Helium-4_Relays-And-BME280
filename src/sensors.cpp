@@ -45,7 +45,7 @@ void sensorBME280::printPacket()
     char temp1[5];
     char fullbuffer1[32];
     fullbuffer1[0] = '\0'; // initialize fullbuffer1 with null characters
-    
+
     // s1temp values
     // we need to convert from float to uint8_t/char the value
     float temperature1 = this->getTemperature();
