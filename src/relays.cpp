@@ -25,3 +25,17 @@ void Relays::setRelays(uint8_t relayStateChar) /// relayStateChar -> 0b10110000 
   digitalWrite(this->RELAY_PIN3, (downlinkRelayState & 0b00100000) != 0);
   digitalWrite(this->RELAY_PIN4, (downlinkRelayState & 0b00010000) != 0);
 }
+
+void Relays::printRelaysState(uint8_t & currChar)
+{
+  String binaryStr = String(currChar, BIN);
+  for (int i = 0; i < 8 - binaryStr.length(); i++)
+  {
+    Serial.print("0");
+  }
+  for (int i = 0; i < binaryStr.length(); i++)
+  {
+    Serial.print(binaryStr[i]);
+  }
+  Serial.println();
+}

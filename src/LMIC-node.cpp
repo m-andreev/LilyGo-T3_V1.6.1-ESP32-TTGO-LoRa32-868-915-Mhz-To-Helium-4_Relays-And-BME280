@@ -60,6 +60,7 @@
 #include "sensors.h"
 #include "relays.h"
 
+////////// SAVING/CALLING EEPROM DATA , DEVICE TYPE AND PRINT EEPROM DATA FUNCTIONS //////////////////////////////////////////////
 enum DeviceType
 {
     DEVICE_TYPE_SENSORS = 1,
@@ -112,7 +113,7 @@ void printDataChange(eepromData &myStructure)
     if (myStructure.deviceType == DEVICE_TYPE_RELAYS)
     {
         Serial.print("Saved relays' state: ");
-        // Convert currChar to a binary string
+        // Convert myStructure.relaysChar to a binary string
         String binaryStr = String(myStructure.relaysChar, BIN);
 
         // Print the binary string with leading zeros
@@ -125,9 +126,10 @@ void printDataChange(eepromData &myStructure)
             Serial.print(binaryStr[i]);
         }
         Serial.println();
-        // Serial.println(myStructure.relaysChar, BIN);
     }
 }
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #include "cactus_io_BME280_I2C.h"
 #include <Wire.h>
@@ -141,20 +143,11 @@ sensorBME280 bme1(0x76); // I2C using address 0x76
 // Create relays instance
 Relays relays;
 
-/*
-// Relays' pins definitions
-const int RELAY_PIN1 = 15;
-const int RELAY_PIN2 = 14;
-const int RELAY_PIN3 = 4;
-const int RELAY_PIN4 = 13;
-*/
-
-uint8_t currChar = 0b00000000; /// current 4 relays' states
-
-uint8_t tempArr[5]; /// temporary array for assigning values of relays! High / Low
+////////////////////////////////////////////////////////////////
 
 const uint8_t payloadBufferLength = 32; // Adjust to fit max payload length
 
+///tempVar is used to store the WORD, THAT WILL BE PRINTED ON THE DEVICE'S SCREEN
 uint8_t tempVar[payloadBufferLength]; /// temporary variable for printing text ON DEVICE'S SCREEN!
 int8_t downlinkLength;                /// length of the text, that's send to the device
 
@@ -877,7 +870,7 @@ void processWork(ostime_t doWorkJobTimeStamp)
             {
                 bme1.printPacket();
                 bme1.buildPacket(payloadBuffer, payloadSize);
-                uint8_t *myArrayPointer = bme1.getPayload();                // get the pointer to the array returned by myFunction
+                uint8_t *myArrayPointer = bme1.getPayload(); // get the pointer to the array returned by myFunction
                 memcpy(payloadBuffer, myArrayPointer, sizeof(payloadSize)); // copy the contents of myArrayPointer to payload
             }
 
@@ -889,38 +882,27 @@ void processWork(ostime_t doWorkJobTimeStamp)
                 uint8_t Reading3 = digitalRead(relays.RELAY_PIN3); // Reading status of digital Pin 32
                 uint8_t Reading4 = digitalRead(relays.RELAY_PIN4); // Reading status of digital Pin 16
 
-                tempArr[0] = (Reading1 ? '1' : '0');
-                tempArr[1] = (Reading2 ? '1' : '0');
-                tempArr[2] = (Reading3 ? '1' : '0');
-                tempArr[3] = (Reading4 ? '1' : '0');
+                relays.tempArr[0] = (Reading1 ? '1' : '0');
+                relays.tempArr[1] = (Reading2 ? '1' : '0');
+                relays.tempArr[2] = (Reading3 ? '1' : '0');
+                relays.tempArr[3] = (Reading4 ? '1' : '0');
 
                 // Print the current readings
                 Serial.print("Current relay state: ");
-                for (int i = 0; i < sizeof(tempArr) - 1; i++)
+                for (int i = 0; i < sizeof(relays.tempArr) - 1; i++)
                 {
-                    Serial.print((char)tempArr[i]);
+                    Serial.print((char)relays.tempArr[i]);
                 }
                 Serial.println();
 
                 // Assign the readings to the current char , if EEPROM has no char
-                currChar = myStructure.relaysChar;
-
-                // Convert currChar to a binary string
-                String binaryStr = String(currChar, BIN);
+                relays.currChar = myStructure.relaysChar;
 
                 // Print the binary string with leading zeros , because of MSB printing of BIN format :)
                 Serial.print("Current relay state's char: ");
-                for (int i = 0; i < 8 - binaryStr.length(); i++)
-                {
-                    Serial.print("0");
-                }
-                for (int i = 0; i < binaryStr.length(); i++)
-                {
-                    Serial.print(binaryStr[i]);
-                }
-                Serial.println();
+                relays.printRelaysState(relays.currChar);
 
-                payloadBuffer[0] = currChar;
+                payloadBuffer[0] = relays.currChar;
                 payloadSize = 1;
             }
 
@@ -952,58 +934,8 @@ void processDownlink(ostime_t txCompleteTimestamp, uint8_t fPort, uint8_t *data,
         printEvent(timestamp, "Counter reset", PrintTarget::All, false);
     }
 
-    /////If downlink message is received ... :
-
-    /// Changing the doWorkInterval time
-    if (dataLength == 1 && data[0] != resetCmd && fPort == 2)
-    {
-        if (data[0] <= 60)
-        {
-            doWorkIntervalSeconds = (int)60;
-            myStructure.interval = doWorkIntervalSeconds;
-            saveToEEPROM();
-
-            printDataChange(myStructure);
-        }
-        else
-        {
-            doWorkIntervalSeconds = (int)data[0];
-            myStructure.interval = doWorkIntervalSeconds;
-            saveToEEPROM();
-
-            printDataChange(myStructure);
-        }
-    }
-
-    if (dataLength == 2 && fPort == 2)
-    {
-        uint16_t fullNum = (uint16_t)data[0] << 8 | (uint16_t)data[1];
-
-        Serial.println();
-        Serial.print("Received number from downlink: ");
-        Serial.println((int)fullNum);
-        Serial.println();
-
-        if (fullNum >= 3600)
-        {
-            doWorkIntervalSeconds = (int)3600;
-            myStructure.interval = doWorkIntervalSeconds;
-            saveToEEPROM();
-
-            printDataChange(myStructure);
-        }
-        else
-        {
-            doWorkIntervalSeconds = (int)fullNum;
-            myStructure.interval = doWorkIntervalSeconds;
-            saveToEEPROM();
-
-            printDataChange(myStructure);
-        }
-    }
-
-    /// Printing the sent downlink message
-    if (dataLength > 1 && fPort == 1)
+    /// Printing the sent downlink message , if fPort = 1
+    if (fPort == 1 && dataLength > 1)
     {
         // New code
         Serial.println("Downlink has been received! ...");
@@ -1035,6 +967,58 @@ void processDownlink(ostime_t txCompleteTimestamp, uint8_t fPort, uint8_t *data,
         Serial.println();
     }
 
+    /////If downlink message is received ... :
+    if (fPort == 2)
+    {
+        /// Changing the doWorkInterval time
+        if (dataLength == 1 && data[0] != resetCmd)
+        {
+            if (data[0] <= 60)
+            {
+                doWorkIntervalSeconds = (int)60;
+                myStructure.interval = doWorkIntervalSeconds;
+                saveToEEPROM();
+
+                printDataChange(myStructure);
+            }
+            else
+            {
+                doWorkIntervalSeconds = (int)data[0];
+                myStructure.interval = doWorkIntervalSeconds;
+                saveToEEPROM();
+
+                printDataChange(myStructure);
+            }
+        }
+
+        if (dataLength == 2)
+        {
+            uint16_t fullNum = (uint16_t)data[0] << 8 | (uint16_t)data[1];
+
+            Serial.println();
+            Serial.print("Received number from downlink: ");
+            Serial.println((int)fullNum);
+            Serial.println();
+
+            if (fullNum >= 3600)
+            {
+                doWorkIntervalSeconds = (int)3600;
+                myStructure.interval = doWorkIntervalSeconds;
+                saveToEEPROM();
+
+                printDataChange(myStructure);
+            }
+            else
+            {
+                doWorkIntervalSeconds = (int)fullNum;
+                myStructure.interval = doWorkIntervalSeconds;
+                saveToEEPROM();
+
+                printDataChange(myStructure);
+            }
+        }
+    }
+
     if (fPort == 3 && dataLength == 1 && myStructure.deviceType == DEVICE_TYPE_RELAYS)
     {
         // Extract the downlink value
@@ -1042,32 +1026,26 @@ void processDownlink(ostime_t txCompleteTimestamp, uint8_t fPort, uint8_t *data,
 
         // Extract the first 4 digits of the downlink value and the current value of currChar
         uint8_t downlinkRelayState = downlinkValue & 0b11110000;
-        uint8_t currentRelayState = currChar & 0b11110000;
+        uint8_t currentRelayState = relays.currChar & 0b11110000;
 
         if (downlinkRelayState == currentRelayState)
         {
             Serial.print("Relay state is the same : ");
-            Serial.println(currChar, BIN);
+            relays.printRelaysState(relays.currChar);
         }
         else
         {
             // Update the state of all the relays based on the downlink value
             relays.setRelays(downlinkValue);
-            /*
-            digitalWrite(relays.RELAY_PIN1, (downlinkValue & 0b10000000) != 0);
-            digitalWrite(relays.RELAY_PIN2, (downlinkValue & 0b01000000) != 0);
-            digitalWrite(relays.RELAY_PIN3, (downlinkValue & 0b00100000) != 0);
-            digitalWrite(relays.RELAY_PIN4, (downlinkValue & 0b00010000) != 0);
-            */
 
-            currChar = downlinkValue;
+            relays.currChar = downlinkValue; // assign the current downlink value to the currChar variable
 
             /// Setting the EEPROM variable for relays states
-            myStructure.relaysChar = currChar; // assigning the current changed relays' state
+            myStructure.relaysChar = relays.currChar; // assigning the current changed relays' state
 
+            // Print the binary string with leading zeros , because of MSB printing of BIN format :)
             Serial.print("Relay state updated to: ");
-            Serial.println(currChar, BIN);
-
+            relays.printRelaysState(relays.currChar);
             saveToEEPROM();
         }
     }
