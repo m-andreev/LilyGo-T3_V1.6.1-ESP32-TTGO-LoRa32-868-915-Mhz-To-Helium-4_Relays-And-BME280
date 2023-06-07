@@ -1,3 +1,6 @@
+In this project are soldered 4 relays and a BME280 sensor to a LilyGo-T3_V1.6.1 ESP32 TTGO LoRa32 868-815 MHz and all the configuration is connected to the Helium Network.
+The project is made with LMIC-Node, it has EEPROM feature, to remember the last states of the relays and sensor and it's made with separated files, for the relays and sensors, created with separated classes. The majority of the project is to control the configuration with downlinks, where the main idea is to make the device to act as sensor configuration or relays configuration, you can also change the "doWorkIntervalSeconds", with a downlink, and you can change the 4 relays' states, when the device is in relays mode, in the normal mode of downlink, you print the downlink text/value directly on screen, again. The device remembers the last mode used and needs to be changed if it's necessary. Everything is optimized as possible.
+
 This repository contains LMIC-node, an example LoRaWAN application for a node for The Things Network.  
 Get your node quickly up and running with LMIC-node.
 
